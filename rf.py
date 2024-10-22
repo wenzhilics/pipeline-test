@@ -117,19 +117,13 @@ def get_sample_points(df, y, classifier, nslice=400, nsample=100):
     for i in range(nslice):
         df_slice = df.sample(n=nsample, random_state=i) 
         y_slice = y[df_slice.index]
-        rbf_slice = np.vstack(df_slice['rbf'])
-        df_slice = df_slice.drop(columns=['rbf']) # drop rbf feat from df
+        rbf_feature = RBFSampler(gamma=1, random_state=1, n_components=5) 
+        rbf_slice = rbf_feature.fit_transform(df_slice) 
 
         acc = classifier.score(df_slice, y_slice)
         acc_lst.append(acc)
         rbf_lst.append(rbf_slice)
     return rbf_lst, acc_lst
-
-# df to rbf emb
-# TODO: fit on df_train, transform on df_eval
-rbf_feature = RBFSampler(gamma=1, random_state=1, n_components=5) 
-rbf_features = rbf_feature.fit_transform(df_rest) 
-df_rest['rbf'] = [rbf_features[i] for i in range(rbf_features.shape[0])] # append rbf emb to df
 
 # 40% data to train, 40% data to eval
 df_train, df_eval, y_train, y_eval = train_test_split(df_rest, y_rest, test_size=0.5, random_state=12) 
