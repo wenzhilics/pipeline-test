@@ -86,7 +86,8 @@ def preprocess_german(df, preprocess):
         df.loc[(df['duration'] > 36), 'duration'] = 3
         df['age'] = df['age'].apply(lambda x : 1 if x >= 45 else 0) # 1 if old, 0 if young
     
-    df = df.drop(columns=['purpose', 'personal_status', 'housing', 'credit']) 
+    df = df.drop(columns=['credit_hist', 'purpose', 'credit_amt', 'savings', 'employment', 'age', 'install_plans',\
+            'housing', 'num_credits', 'job', 'num_liable', 'personal_status','credit']) 
 
     return df
 
