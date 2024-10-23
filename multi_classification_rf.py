@@ -32,6 +32,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.kernel_approximation import RBFSampler
 import copy
+from sklearn.metrics import accuracy_score
 
 import torch
 import gpytorch
@@ -48,6 +49,7 @@ import torch.optim as optim
 from matplotlib import pyplot as plt
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import OneHotEncoder
+from sklearn.metrics import confusion_matrix
 
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -118,11 +120,18 @@ def get_sample_points(df, y, classifier, nslice=400, nsample=100):
     for i in range(nslice):
         df_slice = df.sample(n=nsample, random_state=i) 
         y_slice = y[df_slice.index]
-        rbf_feature = RBFSampler(gamma=1, random_state=1, n_components=5) 
+        rbf_feature = RBFSampler(gamma=1, random_state=1, n_components=40) 
         rbf_slice = rbf_feature.fit_transform(df_slice) 
 
         acc = classifier.score(df_slice, y_slice)
-        acc_lst.append(acc)
+        if acc <= 0.69:
+            acc_lst.append(0)
+        elif acc <= 0.72:
+            acc_lst.append(1)
+        elif acc <= 0.75:
+            acc_lst.append(2)
+        else:
+            acc_lst.append(3)
         rbf_lst.append(rbf_slice)
     return rbf_lst, acc_lst
 
@@ -134,85 +143,36 @@ rbf_lst_eval, acc_lst_eval = get_sample_points(df_eval, y_eval, classifier)
 # train RandomForest model
 train_x = np.stack([np.mean(vector, axis=0) for vector in rbf_lst_train], axis=0)  # [nslice, nsample, nrbf] -> [nslice, nrbf]
 
-# scaler is not necessary to train RandomForest!
-#scaler = StandardScaler()
-#train_x = scaler.fit_transform(train_x)
+# scaler is necessary here!
+scaler = StandardScaler()
+train_x = scaler.fit_transform(train_x)
 train_y = np.array(acc_lst_train)
 
 # Initialize RandomForest model
-rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
-rf_model.fit(train_x, train_y)
+classifier2 = RandomForestClassifier(n_estimators=100, random_state=42)
+classifier2.fit(train_x, train_y)
 
 # start eval!
 # eval on train
-pred_train = rf_model.predict(train_x)
+pred_train = classifier2.predict(train_x)
 true_train = train_y
-max_pred_train_index = np.argmax(pred_train)
-min_pred_train_index = np.argmin(pred_train)
-max_train_x = train_x[max_pred_train_index]
-min_train_x = train_x[min_pred_train_index]
-print(f"train pred max: {max_train_x.tolist()}")
-print(f"train pred min: {min_train_x.tolist()}")
-
-max_true_train_index = np.argmax(true_train)
-min_true_train_index = np.argmin(true_train)
-max_true_train_x = train_x[max_true_train_index]
-min_true_train_x = train_x[min_true_train_index]
-print(f"train true max: {max_true_train_x.tolist()}")
-print(f"train true min: {min_true_train_x.tolist()}")
+cm_train = confusion_matrix(true_train, pred_train)
+acc_train = accuracy_score(true_train, pred_train)
+# print("[[TN, FP],\n [FN, TP]]")
+print("train")
+print(cm_train)
+print(f"train acc: {acc_train}")
+print("------------")
 
 # eval on eval
 val_x = np.stack([np.mean(vector, axis=0) for vector in rbf_lst_eval], axis=0)  # [nslice, nsample, nrbf] -> [nslice, nrbf]
-#val_x = scaler.transform(val_x)
+val_x = scaler.transform(val_x)
 
-pred = rf_model.predict(val_x)
+pred = classifier2.predict(val_x)
 true = np.array(acc_lst_eval)
-max_pred_index = np.argmax(pred)
-min_pred_index = np.argmin(pred)
-max_x = val_x[max_pred_index]
-min_x = val_x[min_pred_index]
-print(f"eval pred max: {max_x.tolist()}")
-print(f"eval pred min: {min_x.tolist()}")
 
-max_true_index = np.argmax(true)
-min_true_index = np.argmin(true)
-max_true_x = val_x[max_true_index]
-min_true_x = val_x[min_true_index]
-print(f"eval true max: {max_true_x.tolist()}")
-print(f"eval true min: {min_true_x.tolist()}")
-
-# visualize val
-fig, (ax5, ax6) = plt.subplots(1, 2, figsize=(16, 6))
-ax5.scatter(pred, true, marker='o', color='tab:green', label='Pred vs True')
-min_val = min(ax5.get_xlim()[0], ax5.get_ylim()[0])
-max_val = max(ax5.get_xlim()[1], ax5.get_ylim()[1])
-ax5.plot([min_val, max_val], [min_val, max_val], color='blue', linestyle='--', label='y = x')
-ax5.set_xlabel('Prediction')
-ax5.set_ylabel('True Values')
-ax5.grid(True)
-ax5.legend(loc='upper left')
-ax5.set_title('Val')
-
-# visualize train
-ax6.scatter(pred_train, true_train, marker='o', color='tab:green', label='Pred vs True')
-min_val = min(ax6.get_xlim()[0], ax6.get_ylim()[0])
-max_val = max(ax6.get_xlim()[1], ax6.get_ylim()[1])
-ax6.plot([min_val, max_val], [min_val, max_val], color='blue', linestyle='--', label='y = x')
-ax6.set_xlabel('Prediction')
-ax6.set_ylabel('True Values')
-ax6.grid(True)
-ax6.legend(loc='upper left')
-ax6.set_title('Train')
-
-plt.tight_layout()
-plt.show()
-plt.savefig("rf-nhid5.pdf", format="pdf")
-
-ranges_train = [np.sum(true_train <= 0.69), np.sum((true_train > 0.69) & (true_train <= 0.72)), np.sum((true_train > 0.72) & (true_train <= 0.75)), np.sum(true_train > 0.75)]
-print("number of train true in interval <0.69, <0.72, <0.75, >0.75")
-print(ranges_train)
-
-ranges = [np.sum(pred <= 0.69), np.sum((pred > 0.69) & (pred <= 0.72)), np.sum((pred > 0.72) & (pred <= 0.75)), np.sum(pred > 0.75)]
-print("number of val prediction in interval <0.69, <0.72, <0.75, >0.75")
-print(ranges)
-
+cm = confusion_matrix(true, pred)
+acc = accuracy_score(true, pred)
+print("eval")
+print(cm)
+print(f"val acc: {acc}")

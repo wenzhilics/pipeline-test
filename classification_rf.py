@@ -31,6 +31,7 @@ from sklearn.pipeline import Pipeline
 
 from sklearn.impute import SimpleImputer
 from sklearn.kernel_approximation import RBFSampler
+from sklearn.metrics import accuracy_score
 import copy
 
 import torch
@@ -152,9 +153,12 @@ classifier2.fit(train_x, train_y)
 pred_train = classifier2.predict(train_x)
 true_train = train_y
 cm_train = confusion_matrix(true_train, pred_train)
+acc_train = accuracy_score(true_train, pred_train)
 print("[[TN, FP],\n [FN, TP]]")
 print("train")
 print(cm_train)
+print(acc_train)
+print("------------")
 
 # eval on eval
 val_x = np.stack([np.mean(vector, axis=0) for vector in rbf_lst_eval], axis=0)  # [nslice, nsample, nrbf] -> [nslice, nrbf]
@@ -164,5 +168,7 @@ pred = classifier2.predict(val_x)
 true = np.array(acc_lst_eval)
 
 cm = confusion_matrix(true, pred)
+acc = accuracy_score(true, pred)
 print("eval")
 print(cm)
+print(acc)
